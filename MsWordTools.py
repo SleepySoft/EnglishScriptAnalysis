@@ -60,7 +60,7 @@ def process_all_docx_files(directory_path):
     """
     processed_contents = {}
     for filename in os.listdir(directory_path):
-        if filename.endswith('.docx'):
+        if filename.endswith('.docx') or filename.endswith('.doc') :
             file_path = os.path.join(directory_path, filename)
             try:
                 content = process_docx_file(file_path)
@@ -69,3 +69,42 @@ def process_all_docx_files(directory_path):
             except Exception as e:
                 print(f"处理文件 {filename} 时出错: {str(e)}")
     return processed_contents
+
+
+def convert_doc_to_docx_batch(input_folder, output_folder):
+    """
+    批量将指定文件夹中的.doc文件转换为.docx文件
+
+    Args:
+        input_folder (str): 包含原始.doc文件的文件夹路径
+        output_folder (str): 转换后的.docx文件的输出文件夹路径
+    """
+    import comtypes.client
+
+    # 确保输出文件夹存在
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    # 初始化Word应用
+    word = comtypes.client.CreateObject('Word.Application')
+    word.Visible = False  # 后台运行，不显示Word界面
+
+    # 遍历输入文件夹中的所有文件
+    for filename in os.listdir(input_folder):
+        if filename.endswith('.doc'):
+            # 构建完整的输入和输出文件路径
+            input_path = os.path.join(input_folder, filename)
+            output_path = os.path.join(output_folder, f"{os.path.splitext(filename)[0]}.docx")
+
+            try:
+                # 打开.doc文档
+                doc = word.Documents.Open(input_path)
+                # 另存为.docx格式 (FileFormat=16 表示.docx格式)
+                doc.SaveAs(output_path, FileFormat=16)
+                doc.Close()
+                print(f"成功转换: {filename} -> {os.path.basename(output_path)}")
+            except Exception as e:
+                print(f"转换失败 {filename}: {e}")
+
+    # 关闭Word应用程序
+    word.Quit()

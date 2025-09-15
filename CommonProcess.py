@@ -3,7 +3,7 @@ import re
 import pandas as pd
 
 from MsWordTools import process_all_docx_files
-from EnglishAnalysisTools import remove_non_english
+from EnglishAnalysisTools import remove_non_english, count_word_frequency, analyze_collocations
 
 
 def remove_role_info(text):
@@ -22,14 +22,16 @@ def remove_role_info(text):
     return '\n'.join(cleaned_lines)
 
 
-def common_process_eng_docs_to_pure_text(directory: str):
+def common_process_eng_docs_to_pure_text(directory: str) -> str:
     results = process_all_docx_files(directory)
+    file_path = os.path.join(directory, 'pure_text.txt')
 
-    with open(os.path.join(directory, 'pure_text.txt'), 'wt') as f:
+    with open(file_path, 'wt') as f:
         for filename, content in results.items():
             clean_text = remove_non_english(content)
             clean_text = remove_role_info(clean_text)
             f.write(clean_text)
+    return file_path
 
 
 def load_pure_text(directory: str) -> str:
@@ -85,4 +87,36 @@ def save_collocations(collocations, directory: str, file_name: str = 'collocatio
     df_collocations.to_excel(file_path, index=False)
 
     print(f"搭配分析结果已保存到 '{file_path}'")
+
+
+def common_flow(directory: str):
+    # If pure_text.txt has been generated, we don't have to parse docx again.
+
+    print('*' * 80)
+    print('Loading word documents...')
+    file_path = common_process_eng_docs_to_pure_text(directory)
+    print(f'Pure text is saved to: {file_path}')
+
+    print('*' * 80)
+    print('Loading word documents...')
+    full_text = load_pure_text(directory)
+    print(f'Load finished. Text length: {len(full_text)}')
+
+    print('*' * 80)
+    print('Start counting word frequency...')
+    sentences, frequency = count_word_frequency(full_text)
+
+    print('*' * 80)
+    print('Saving word frequency finished.')
+    save_sentences_and_word_frequency(sentences, frequency, directory)
+
+    print('*' * 80)
+    print('Analyzing text collocations...')
+    collocations = analyze_collocations(full_text)
+
+    dump_collocations(collocations)
+
+    print('*' * 80)
+    print('Saving text collocations...')
+    save_collocations(collocations, directory)
 
