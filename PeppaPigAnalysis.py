@@ -6,7 +6,7 @@ if __name__ == "__main__":
     directory = 'PeppaPig'
 
     # If pure_text.txt has been generated, we don't have to parse docx again.
-    # common_process_eng_docs_to_pure_text(directory)
+    common_process_eng_docs_to_pure_text(directory)
 
     full_text = load_pure_text(directory)
 

@@ -2,6 +2,7 @@ import re
 import nltk
 import string
 import traceback
+import unicodedata
 import pandas as pd
 from collections import Counter
 from typing import Tuple, List, Dict
@@ -22,7 +23,180 @@ def check_download_nlp_data():
 check_download_nlp_data()       # Execute immediately when module loading
 
 
-def remove_non_english(text, keep_space=True, keep_number=False):
+def normalize_punctuation_to_ascii(text):
+    """
+    将常见的中文标点符号转换为对应的英文标点符号。
+    注意：这是一个示例性的映射，并非所有标点都有一一对应关系，你可以根据需要扩充。
+
+    Args:
+        text (str): 输入的原始文本，可能包含中文标点。
+
+    Returns:
+        str: 转换后的文本，中文标点被替换为英文标点。
+    """
+    # 构建一个中文标点到英文标点的映射字典
+    punctuation_map = {
+        '，': ',',  # 中文逗号 -> 英文逗号
+        '。': '.',  # 中文句号 -> 英文句号
+        '；': ';',  # 中文分号 -> 英文分号
+        '：': ':',  # 中文冒号 -> 英文冒号
+        '？': '?',  # 中文问号 -> 英文问号
+        '！': '!',  # 中文感叹号 -> 英文感叹号
+        '“': '"',  # 中文双引号 -> 英文双引号
+        '”': '"',
+        '‘': "'",  # 中文单引号 -> 英文单引号
+        '’': "'",
+        '（': '(',  # 中文括号 -> 英文括号
+        '）': ')',
+        '【': '[',  # 中文方括号 -> 英文方括号
+        '】': ']',
+        '《': '<',  # 中文书名号 -> 英文尖括号 (或通常也直接去除)
+        '》': '>',
+        '～': '~',  # 中文波浪号 -> 英文波浪号
+        '—': '-',  # 中文破折号 -> 英文连字符 (这是一个近似替换)
+        '…': '...',  # 中文省略号 -> 英文省略号
+    }
+
+    # 逐个字符检查并替换
+    normalized_text = []
+    for char in text:
+        if char in punctuation_map:
+            normalized_text.append(punctuation_map[char])
+        else:
+            normalized_text.append(char)
+
+    return ''.join(normalized_text)
+
+
+def full_width_to_ascii(text):
+    """
+    将全角字母和数字转换为半角（ASCII）字母和数字。
+    全角字符的Unicode范围通常从FF01到FF5E（对应数字和字母），
+    它们与半角ASCII字符有固定的偏移量（0xFEE0）。
+    此函数不会影响标点、汉字等其他字符。
+
+    Args:
+        text (str): 输入的文本，可能包含全角字母和数字。
+
+    Returns:
+        str: 转换后的文本，全角字母和数字被转换为半角。
+    """
+    normalized_text = []
+    for char in text:
+        # 获取字符的Unicode名称，常用于判断字符类型
+        name = unicodedata.name(char, '')
+        # 检查是否为全角字符（FULLWIDTH ...）
+        if 'FULLWIDTH' in name:
+            # 尝试将其转换为半角形式
+            try:
+                # 使用 unicodedata.normalize 转换，但更直接的是计算其半角码点
+                # 全角字符与半角字符的码点相差 0xFEE0
+                half_width_char = chr(ord(char) - 0xFEE0)
+                # 确保转换后的字符确实是ASCII（例如，全角'A'转半角'A'）
+                if half_width_char.isascii():
+                    normalized_text.append(half_width_char)
+                else:
+                    # 如果转换后不是ASCII，保留原字符（例如某些全角符号）
+                    normalized_text.append(char)
+            except (ValueError, TypeError):
+                # 如果转换出错，保留原字符
+                normalized_text.append(char)
+        else:
+            # 如果不是全角字符，直接保留
+            normalized_text.append(char)
+    return ''.join(normalized_text)
+
+
+def keep_only_ascii(text):
+    """
+    移除字符串中的所有非ASCII字符。
+
+    Args:
+        text (str): 待处理的字符串。
+
+    Returns:
+        str: 只包含ASCII字符的字符串。
+    """
+    # 使用正则表达式匹配非ASCII字符（码点 > 127 的字符）并移除
+    # 模式 [^\x00-\x7F] 匹配所有非ASCII字符
+    ascii_text = re.sub(r'[^\x00-\x7F]', '', text)
+    return ascii_text
+
+
+def remove_digits(text):
+    """
+    移除字符串中的所有阿拉伯数字。
+
+    Args:
+        text (str): 待处理的字符串。
+
+    Returns:
+        str: 不包含数字的字符串。
+    """
+    # 使用正则表达式移除非数字字符
+    # 模式 [0-9] 匹配所有数字
+    no_digits_text = re.sub(r'[0-9]', '', text)
+    return no_digits_text
+
+
+def replace_unwanted_symbols(text, keep_chars=""",?!:"'"""):
+    """
+    增强版的符号替换函数，尝试区分单词连字符和数学减号，同时区分句号和小数点。
+
+    Args:
+        text (str): 输入文本
+        keep_chars (str): 额外需要保留的字符
+
+    Returns:
+        str: 处理后的文本
+    """
+    # 使用罕见字符作为临时标记
+    temp_marker_hyphen = "▦"  # 用于受保护的连字符
+    temp_marker_period = "◎"  # 用于受保护的句号
+
+    # 1. 保护单词中的连字符（前后是字母）
+    protected_text = re.sub(r'(?<=[a-zA-Z])-(?=[a-zA-Z])', temp_marker_hyphen, text)
+
+    # 2. 保护疑似句号（不在数字间）
+    protected_text = re.sub(r'\.(?!(?<=\d\.)\d)', temp_marker_period, protected_text)
+
+    # 3. 定义基础保留集合（字母、数字、空格、临时标记）
+    base_keep = r'\w\s'
+    # 构建保留字符模式（基础保留 + 用户指定保留 + 临时标记）
+    keep_pattern = f"{base_keep}{re.escape(keep_chars)}{temp_marker_hyphen}{temp_marker_period}"
+
+    # 4. 将所有不在保留集中的字符替换为空格
+    cleaned_text = re.sub(f"[^{keep_pattern}]", ' ', protected_text)
+
+    # 5. 恢复受保护的连字符和句号
+    final_text = cleaned_text.replace(temp_marker_hyphen, '-').replace(temp_marker_period, '.')
+
+    return final_text
+
+
+def reduce_blank_lines(text, max_blanks=2):
+    """
+    将文本中连续的空行减少到指定最大数量（默认保留2个）
+
+    Args:
+        text (str): 输入的文本字符串
+        max_blanks (int): 允许保留的最大连续空行数，默认为2
+
+    Returns:
+        str: 处理后的文本字符串
+    """
+    # 匹配超过max_blanks的连续空行模式
+    # \n\s* 匹配一个换行符及其后的任意空白字符（包括后续换行符）
+    pattern = r'(\n\s*){' + str(max_blanks + 1) + r',}'
+    # 替换为恰好max_blanks个空行（即max_blanks个换行符）
+    replacement = '\n' * max_blanks
+    # 使用正则替换，re.DOTALL确保.匹配包括换行符在内的所有字符
+    cleaned_text = re.sub(pattern, replacement, text, flags=re.DOTALL)
+
+    return cleaned_text
+
+
+def remove_non_english(text, keep_number=False):
     """
     移除字符串中的所有非英文字符。
 
@@ -42,26 +216,12 @@ def remove_non_english(text, keep_space=True, keep_number=False):
     if not isinstance(text, str):
         raise TypeError("输入参数 text 必须是字符串类型 (str)")
 
-    # 根据参数构建正则表达式模式
-    # 基础模式：匹配所有英文字母（大小写）
-    base_pattern = r'a-zA-Z'
-
-    # 可选：在模式中添加空格
-    if keep_space:
-        base_pattern += r' '
-
-    # 可选：在模式中添加数字
-    if keep_number:
-        base_pattern += r'0-9'
-
-    # 创建正则表达式，匹配所有不在指定集合中的字符
-    # 模式 [^...] 表示匹配任何不在方括号内的字符
-    pattern = re.compile(f'[^{base_pattern}]')
-
-    # 使用空字符串替换所有非英文字符（以及根据选择不保留的数字和空格）
-    cleaned_text = re.sub(pattern, '', text)
-
-    return cleaned_text
+    step1_text = normalize_punctuation_to_ascii(text)
+    step2_text = full_width_to_ascii(step1_text)
+    step3_text = keep_only_ascii(step2_text)
+    step4_text = replace_unwanted_symbols(step3_text)
+    step5_text = remove_digits(step4_text) if not keep_number else step4_text
+    return step5_text
 
 
 def penn_treebank_tag_to_wordnet_tag(treebank_tag):
@@ -314,128 +474,6 @@ def count_word_frequency(text: str,
 
     return sentences, dict(word_freq)
 
-
-
-
-
-# def count_word_frequency(text: str):
-#     # 1. 分句
-#     sentences = sent_tokenize(text)
-#
-#     # 2. 分词 & 预处理（转换为小写、去除标点和停用词）
-#     stop_words = set(stopwords.words('english'))
-#     translator = str.maketrans('', '', string.punctuation)
-#     all_words = []
-#
-#     for sentence in sentences:
-#         words = word_tokenize(sentence)
-#         # 转换为小写并去除标点符号
-#         words = [word.translate(translator).lower() for word in words]
-#         # 去除停用词和空字符串
-#         words = [word for word in words if word not in stop_words and word]
-#         all_words.extend(words)
-#
-#     # 3. 词形还原 (需要先进行词性标注以获得最佳效果)
-#     # 注意：为简化示例，我们假设所有词都是名词('n')。实际应用中应进行词性标注。
-#     lemmatizer = WordNetLemmatizer()
-#     lemmatized_words = [lemmatizer.lemmatize(word, pos='v') for word in all_words]  # 尝试动词形式
-#
-#     # 4. 统计词频
-#     word_freq = Counter(lemmatized_words)
-#     return sentences, word_freq
-
-
-# def analyze_sentence_patterns(sentences):
-#     """
-#     一个简单基于词性标签序列的句型统计示例。
-#     这只是一个初级方法，更准确的句型分析需要依赖句法分析。
-#     """
-#     # 常见的词性标记: NN(名词), VB(动词), IN(介词), DT(冠词), JJ(形容词), PRP(人称代词)
-#     pattern_freq = Counter()
-#
-#     for sentence in sentences:
-#         words = word_tokenize(sentence)
-#         # 获取每个词的词性标签
-#         pos_tags = [tag for word, tag in nltk.pos_tag(words)]
-#         # 将词性标签序列转换为一个字符串，作为句型的近似表示
-#         pattern_key = ' '.join(pos_tags)
-#         pattern_freq[pattern_key] += 1
-#
-#         # 你也可以定义一些规则，将特定的词性序列映射到你定义的句型名称上
-#         # if pos_tags starts with 'PRP VB' -> S+V pattern?
-#
-#     return pattern_freq
-
-
-
-# 使用示例
-if __name__ == "__main__":
-    # directory = "PeppaPig"
-    # results = process_all_docx_files(directory)
-    #
-    # # 查看处理结果（例如，打印第一个文件的内容）
-    # with open('pure_text.txt', 'wt') as f:
-    #     for filename, content in results.items():
-    #         print(f"文件: {filename}")
-    #         print("处理后的内容预览:")
-    #         print(content[:500] + "..." if len(content) > 500 else content)  # 打印前500字符
-    #         print("\n" + "=" * 50 + "\n")
-    #         f.write(content)
-
-    with open('pure_text.txt', 'rt') as f:
-        full_text = f.read()
-
-    # ------------------------------------------------------------------------------------------------------------------
-
-    sentences, frequency = count_word_frequency(full_text)
-
-    print("词频统计结果 (合并变形后):")
-    for word, count in frequency.most_common(10):  # 打印最常见的10个词
-        print(f"{word}: {count}")
-
-    # 创建句子列表的DataFrame
-    df_sentences = pd.DataFrame(sentences, columns=['Sentences'])
-
-    # 创建词频统计的DataFrame
-    df_frequency = pd.DataFrame(frequency.items(), columns=['Word', 'Frequency'])
-    # 按词频从高到低排序
-    df_frequency.sort_values(by='Frequency', ascending=False, inplace=True)
-
-    with pd.ExcelWriter('text_analysis_results.xlsx', engine='openpyxl') as writer:
-        df_sentences.to_excel(writer, sheet_name='Sentences', index=False)
-        df_frequency.to_excel(writer, sheet_name='Word Frequency', index=False)
-
-    print("分析结果已成功导出到 'text_analysis_results.xlsx'")
-
-    # ------------------------------------------------------------------------------------------------------------------
-
-    collocations = analyze_collocations(full_text)
-
-    print("\n=== 常见表达方式归类 ===")
-    for pattern_type, phrases in collocations.items():
-        if phrases:  # 只显示有结果的类型
-            print(f"\n--- {pattern_type} ---")
-            for phrase, freq in phrases:
-                print(f"{phrase}: {freq}")
-
-    data = []
-    for collocation_type, phrases_list in collocations.items():
-        for phrase, frequency in phrases_list:
-            data.append({
-                "搭配模式": collocation_type,
-                "搭配短语": phrase,
-                "出现频率": frequency
-            })
-
-    df_collocations = pd.DataFrame(data)
-
-    # 3. 写入 Excel 文件
-    excel_filename = "collocation_analysis_results.xlsx"
-    df_collocations.to_excel(excel_filename, index=False)
-
-    print(f"搭配分析结果已保存到 '{excel_filename}'")
-
-
 # ----------------------------------------------------------------------------------------------------------------------
 
 def demo_remove_non_english():
@@ -447,20 +485,62 @@ def demo_remove_non_english():
     print("默认模式 (保留字母和空格):", result1)  # 输出: "Hello  This is a test  "
 
     # 示例 2: 保留字母和数字
-    result2 = remove_non_english(test_text, keep_space=False, keep_number=True)
+    result2 = remove_non_english(test_text, keep_number=True)
     print("保留字母和数字:", result2)  # 输出: "HelloThisisatest123456"
 
-    # 示例 3: 只保留英文字母
-    result3 = remove_non_english(test_text, keep_space=False, keep_number=False)
-    print("只保留英文字母:", result3)  # 输出: "HelloThisisatest"
 
-    # 示例 4: 保留字母、数字和空格
-    result4 = remove_non_english(test_text, keep_space=True, keep_number=True)
-    print("保留字母、数字和空格:", result4)  # 输出: "Hello  This is a test. 123 456 "
+def demo_replace_unwanted_symbols():
+    test_cases = [
+        # 基础测试：保留字母、数字、空格
+        ('Hello World 123', '', 'Hello World 123'),
+        # 连字符测试1：单词中的连字符应保留
+        ('bi-directional optimization', '', 'bi-directional optimization'),
+        # 连字符测试2：数学表达式中的减号应替换为空格
+        ('3 - 2 result is 1', '', '3   2 result is 1'),
+        ('3-2 result is 1', '', '3 2 result is 1'),
+        # 句点测试1：句号应保留
+        ('This is a sentence. Another one.', '', 'This is a sentence. Another one.'),
+        # 句点测试2：小数点应替换为空格
+        ('The value is 3.14', '', 'The value is 3 14'),
+        # 混合测试1：同时包含单词连字符、数学减号、句号和小数点
+        ('pi is approx 3.14. pre-defined value: 5 - 3 = 2.', ':', 'pi is approx 3 14. pre-defined value: 5   3   2.'),
+        # 自定义保留字符测试1：保留@符号
+        ('Email me at user@example.com', '@', 'Email me at user@example.com'),
+        # 自定义保留字符测试2：保留逗号和问号
+        ('Hello, world! How are you?', ',?', 'Hello, world  How are you?'),
+        # 边界测试1：字符串开头和结尾的符号
+        ('!@#$Hello%^&*', '', '    Hello    '),
+        # 边界测试2：空字符串
+        ('', '', ''),
+        # 边界测试3：只有符号
+        ('!@#$%^&*', '', '        '),
+        # 复杂符号测试：多种符号混合
+        ('a-b c-d e.f g,h i;j k|l', '', 'a-b c-d e.f g h i j k l'),
+        # 数字和符号组合测试
+        ('1-2-3 4.5 6,7 8:9', '', '1 2 3 4 5 6 7 8 9'),
+        # 保留字符中的连字符处理（如果keep_chars中包含'-'，且位于字符集末尾）
+        ('This-is-a-test-string', '-', 'This-is-a-test-string'),
+        # 保留字符中的句点处理（如果keep_chars中包含'.'）
+        ('Version.1.2.3', '.', 'Version.1.2.3'),
+    ]
+
+    print("开始测试 replace_unwanted_symbols 函数：")
+    print("=" * 60)
+
+    for i, (input_text, keep_chars, expected_output) in enumerate(test_cases, 1):
+        result = replace_unwanted_symbols(input_text, keep_chars)
+        print(f"测试用例 {i}:")
+        print(f"  输入文本: '{input_text}'")
+        print(f"  保留字符: '{keep_chars}'")
+        print(f"  期望输出: '{expected_output}'")
+        print(f"  实际输出: '{result}'")
+        print(f"  是否通过: {result == expected_output}")
+        print("-" * 40)
 
 
 def main():
     demo_remove_non_english()
+    demo_replace_unwanted_symbols()
 
 
 if __name__ == '__main__':
