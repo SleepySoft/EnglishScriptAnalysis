@@ -3,3 +3,4 @@ nltk
 matplotlib
 pandas
 openpyxl
+pywin32

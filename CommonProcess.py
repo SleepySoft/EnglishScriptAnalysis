@@ -45,16 +45,21 @@ def save_sentences_and_word_frequency(
     file_path = os.path.join(directory, file_name)
 
     # 创建句子列表的DataFrame
-    df_sentences = pd.DataFrame(sentences, columns=['Sentences'])
+    df_sentences = pd.DataFrame(sentences, columns=['Sentences']) if sentences else None
 
-    # 创建词频统计的DataFrame
-    df_frequency = pd.DataFrame(frequency.items(), columns=['Word', 'Frequency'])
-    # 按词频从高到低排序
-    df_frequency.sort_values(by='Frequency', ascending=False, inplace=True)
+    if frequency:
+        # 创建词频统计的DataFrame
+        df_frequency = pd.DataFrame(frequency.items(), columns=['Word', 'Frequency'])
+        # 按词频从高到低排序
+        df_frequency.sort_values(by='Frequency', ascending=False, inplace=True)
+    else:
+        df_frequency = None
 
     with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
-        df_sentences.to_excel(writer, sheet_name='Sentences', index=False)
-        df_frequency.to_excel(writer, sheet_name='Word Frequency', index=False)
+        if df_sentences:
+            df_sentences.to_excel(writer, sheet_name='Sentences', index=False)
+        if df_frequency:
+            df_frequency.to_excel(writer, sheet_name='Word Frequency', index=False)
 
     print(f"分析结果已成功导出到 '{file_path}'")
 
