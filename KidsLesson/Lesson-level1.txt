@@ -23,11 +23,12 @@
 
 	Ball, Banana 【1】
 	Bee, Book 【2】
-	Baby, Bear 【3】
+	Baby, Boy 【3】
 
 句型与表达：
-	What’s this ?
-	It’s a …
+	What is it? 【1】
+	What’s this ? 【2】
+	It’s a … 【1】
 
 ---------------------------------------------------------------------------------------
 
@@ -52,8 +53,9 @@
 	Dance, Donut 【3】
 
 句型与表达 - 复习：
-	What's your name ?
-	My name is ... ?
+	What's your name ? 【1】
+	My name is ... ? 【1】
+	I'm ...  【2】
 
 ---------------------------------------------------------------------------------------
 
@@ -63,9 +65,61 @@
 基本指令：
 
 字母：
+    Ee, Ff 【1】
+	E发（/e/）音 【2】
+	F发（/f/）音 【2】
+
+对应单词：
+    Eye, Ear
+    Eight, Eraser
+    Egg, Elephant
+
+    Fish, Flower
+    Fruit, Face
+    Father, Fan
+
+句型与表达：
+    don't
+	Do you like ... ?
+	Yes. I like ...
+	No. I don't like ...
+
+---------------------------------------------------------------------------------------
+
+第四课
+====
+
+基本指令：
+    Hello, Goodbye, Bye~
+
+字母：
+    Gg, Hh 【1】
+	G发（/g/）音 【2】
+	H发（/h/）音 【2】
+
+对应单词：
+    Girl, Grapes
+    Gift, Green
+    Grass, Guitar
+
+    Hello, Hair
+    Hat, House
+    Hand, Happy
+
+句型与表达：
+    I want ...
+
+---------------------------------------------------------------------------------------
+
+第五课
+====
+
+基本指令：
+    Good night
+
+字母：
 
 对应单词：
 
 句型与表达：
-	I (don't) want ...
-	I (don't) want to ...
+
